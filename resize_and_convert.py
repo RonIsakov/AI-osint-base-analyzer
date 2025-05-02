@@ -2,8 +2,8 @@ from PIL import Image
 import os
 
 # Constants
-INPUT_FOLDER = 'screenshots resized'
-OUTPUT_FOLDER = 'screenshots_jpeg'
+INPUT_FOLDER = 'screenshots'
+OUTPUT_FOLDER = 'screenshots_resized'
 TARGET_WIDTH = 1024
 
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
