@@ -1,0 +1,27 @@
+# VS Code settings
+.vscode/
+
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter notebooks checkpoints (if used)
+.ipynb_checkpoints/
+
+# Environment variables
+.env
+
+# Screenshot output
+screenshots/
+screenshots_jpeg/
+
+# Logs
+*.log
+
+# macOS and Windows noise
+.DS_Store
+Thumbs.db
