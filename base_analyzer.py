@@ -4,14 +4,21 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import os
 from PIL import Image
+import base64
+import httpx
+from dotenv import load_dotenv
+
+
+# Ensure .env is loaded
+load_dotenv()  
 
 # === Load API Key ===
 api_key = os.getenv("OPENROUTER_API_KEY")
 
 # Constants
 CSV_PATH = 'military_bases.csv'
-ROWS_TO_PROCESS = 5
-WAIT_TIME = 5
+ROWS_TO_PROCESS = 1
+WAIT_TIME = 7
 SCREENSHOT_DIR = 'screenshots'
 TARGET_WIDTH = 1024
 
@@ -58,7 +65,59 @@ for index, row in df_subset.iterrows():
     os.remove(png_path)
     print(f"Deleted original PNG: {png_path}")
 
-# Keep browser open after loop (optional for debug)
-input("Press Enter to close browser...")
+        # === Fetch country info for prompt ===
+    country = row["country"]
+
+    # === Read and encode image ===
+    with open(jpg_path, "rb") as f:
+        image_data = base64.b64encode(f.read()).decode()
+
+    # === Build prompt ===
+    prompt = (
+        f"You are an expert in understanding satellite imagery and you work for the US army. "
+        f"We got intel that this area is a base/facility of the military of {country}. "
+        "Analyze this image, try to find military devices, structures etc and tell me your findings."
+    )
+
+    # === OpenRouter API call ===
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://yourproject.com",  # required by OpenRouter
+        "X-Title": "osint-military-analysis"
+    }
+
+    payload = {
+        "model": "google/gemini-2.5-flash-preview",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                ]
+            }
+        ]
+    }
+
+    try:
+        response = httpx.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        result = response.json()
+        if "choices" in result:
+            analysis = result["choices"][0]["message"]["content"]
+            print("\n--- LLM Analysis ---")
+            print(f"[{base_id} - {country}]\n{analysis}\n")
+        else:
+            print("❌ Unexpected response format:")
+            print(result)
+            
+        analysis = result["choices"][0]["message"]["content"]
+
+        print("\n--- LLM Analysis ---")
+        print(f"[{base_id} - {country}]\n{analysis}\n")
+    except Exception as e:
+        print(f"❌ Error analyzing {base_id}: {e}")
+
+    # Keep browser open after loop (optional for debug)
+    input("Press Enter to close browser...")
 
 driver.quit()
