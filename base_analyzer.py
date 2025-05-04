@@ -8,6 +8,7 @@ from PIL import Image
 import base64
 import httpx
 from dotenv import load_dotenv
+import re
 
 
 # Ensure .env is loaded
@@ -19,7 +20,7 @@ api_key = os.getenv("OPENROUTER_API_KEY")
 # Constants
 CSV_PATH = 'military_bases.csv'
 ROWS_TO_PROCESS = 1
-WAIT_TIME = 7
+WAIT_TIME = 5
 SCREENSHOT_DIR = 'screenshots'
 TARGET_WIDTH = 1024
 
@@ -36,16 +37,30 @@ options = Options()
 options.headless = False
 driver = webdriver.Chrome(options=options)
 
+# Function to parse latitude, longitude, and zoom from URL
+def parse_lat_lon_zoom(url):
+    try:
+        parts = url.split("@")[1].split(",")
+        lat = float(parts[0])
+        lon = float(parts[1])
+        zoom = float(parts[2].replace("a", ""))  # Strip the 'a'
+        return lat, lon, zoom
+    except Exception as e:
+        print(f"❌ Failed to parse URL: {e}")
+        return None, None, None
+
 # Loop over rows and open Google Earth URLs
 for index, row in df_subset.iterrows():
     base_id  = row['id']
     lat = row['latitude']
     lon = row['longitude']
+    country = row["country"]
     
-    url = f"https://earth.google.com/web/@{lat},{lon},500a,1000d,35y,0h,0t,0r"
-    print(f"\nOpening {base_id } at URL:\n{url}")
+    initial_url = f"https://earth.google.com/web/@{lat},{lon},500a,1000d,35y,0h,0t,0r"
+    lat, lon, zoom = parse_lat_lon_zoom(initial_url)
+    print(f"📍 Start view — lat={lat}, lon={lon}, zoom={zoom}")
     
-    driver.get(url)
+    driver.get(initial_url)
     time.sleep(WAIT_TIME)  # Allow Earth to load
 
     # Take a screenshot
@@ -66,80 +81,96 @@ for index, row in df_subset.iterrows():
     os.remove(png_path)
     print(f"Deleted original PNG: {png_path}")
 
-        # === Fetch country info for prompt ===
-    country = row["country"]
+    for analyst in range(8):
+        
 
-    # === Read and encode image ===
-    with open(jpg_path, "rb") as f:
-        image_data = base64.b64encode(f.read()).decode()
+        # === Read and encode image ===
+        with open(jpg_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode()
 
-    # === Build prompt ===
-    prompt = (
-    f"You are an expert in understanding satellite imagery and you work for the US army. "
-    f"We got intel that this area is a base/facility of the military of {country}. "
-    "Analyze this image and respond ONLY with a JSON object containing the following keys:\n"
-    "1. 'findings': A list of findings that you think are important for the US army to know, including "
-    "all man-made structures, military equipment, and infrastructure make sure to start each finding in a new line.\n"
-    "2. 'analysis': A detailed analysis of your findings make sure to start each finding in a new line.\n"
-    "3. 'things_to_continue_analyzing': A list of things that you think are important to continue "
-    "analyzing in further images make sure to start each thing in a new line.\n"
-    "4. 'action': One of ['zoom-in', 'zoom-out', 'move-left', 'move-right', 'finish'] based on what "
-    "would help you analyze the image or area better.\n"
-    "Respond ONLY with valid JSON. Do not include explanations or extra text."
-    )
+        # === Build prompt ===
+        prompt = (
+        f"You are an expert in understanding satellite imagery and you work for the US army. "
+        f"We got intel that this area is a base/facility of the military of {country}. "
+        "Analyze this image and respond ONLY with a JSON object containing the following keys:\n"
+        "1. 'findings': A list of findings that you think are important for the US army to know, including "
+        "all man-made structures, military equipment, and infrastructure make sure to start each finding in a new line.\n"
+        "2. 'analysis': A detailed analysis of your findings make sure to start each finding in a new line.\n"
+        "3. 'things_to_continue_analyzing': A list of things that you think are important to continue "
+        "analyzing in further images make sure to start each thing in a new line.\n"
+        "4. 'action': One of ['zoom-in', 'zoom-out', 'move-left', 'move-right', 'finish'] based on what "
+        "would help you analyze the image or area better.\n" 
+        "If the current zoom level is already low enough to understand key details, do not ask to zoom in further. Only suggest 'zoom-in' if major details are still unclear.\n"
+        "Respond ONLY with valid JSON. Do not include explanations or extra text."
+        )
 
-    # === OpenRouter API call ===
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "https://yourproject.com",  # required by OpenRouter
-        "X-Title": "osint-military-analysis"
-    }
+        # === OpenRouter API call ===
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://yourproject.com",  # required by OpenRouter
+            "X-Title": "osint-military-analysis"
+        }
 
-    payload = {
-        "model": "google/gemini-2.5-flash-preview",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
-                ]
-            }
-        ]
-    }
-
-    try:
-        response = httpx.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60)
-        result = response.json()
-        if "choices" in result:
-            analysis = result["choices"][0]["message"]["content"]
-        else:
-            print("❌ Unexpected response format:")
-            print(result)
-            
-        analysis = result["choices"][0]["message"]["content"]
-
-        # Clean up the analysis string
-        analysis_clean = analysis.strip()
-        if analysis_clean.startswith("```json"):
-            analysis_clean = analysis_clean.replace("```json", "").replace("```", "").strip()
+        payload = {
+            "model":"meta-llama/llama-3-70b-instruct",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                    ]
+                }
+            ]
+        }
 
         try:
-            parsed_json = json.loads(analysis_clean)
-            print("\n✅ Parsed JSON:")
-            print(parsed_json)
-            
-        
-        except json.JSONDecodeError as e:
-            print("❌ JSON parsing failed:")
-            print(e)
-            print("Raw response:")
-            print(analysis_clean)
+            response = httpx.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60)
+            result = response.json()
+            if "choices" in result:
+                analysis = result["choices"][0]["message"]["content"]
+            else:
+                print("❌ Unexpected response format:")
+                print(result)
+                
+            analysis = result["choices"][0]["message"]["content"]
 
-    except Exception as e:
-        print(f"❌ Error analyzing {base_id}: {e}")
+            # Clean up the analysis string
+            analysis_clean = analysis.strip()
+            if analysis_clean.startswith("```json"):
+                analysis_clean = analysis_clean.replace("```json", "").replace("```", "").strip()
+            analysis_clean = re.sub(r",\s*([\]}])", r"\1", analysis_clean)  # Remove trailing commas
+            try:
+                parsed_json = json.loads(analysis_clean)
+                print("\n✅ Parsed JSON:")
+                print(parsed_json)
+                action = parsed_json.get("action", "finish")
+                if action == "zoom-in":
+                    zoom = max(0.01, zoom * 0.5)
+                elif action == "zoom-out":
+                    zoom = zoom * 1.5
+                elif action == "move-left":
+                    lon -= 0.05
+                elif action == "move-right":
+                        lon += 0.05
+                new_url = f"https://earth.google.com/web/@{lat},{lon},{zoom}a,1000d,35y,0h,0t,0r"
+                print(f"🔁 Analyst {analyst+1} action: {action} → New view:\n{new_url}")
+                driver.get(new_url)
+                time.sleep(WAIT_TIME)
+            
+            except json.JSONDecodeError as e:
+                print("❌ JSON parsing failed:")
+                print(e)
+                print("Raw response:")
+                print(analysis_clean)
+
+        except Exception as e:
+            print(f"❌ Error analyzing {base_id}: {e}")
 
     # Keep browser open after loop (optional for debug)
     input("Press Enter to close browser...")
 
 driver.quit()
+
+
+    
