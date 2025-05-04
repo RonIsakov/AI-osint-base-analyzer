@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import time
 from selenium import webdriver
@@ -74,9 +75,17 @@ for index, row in df_subset.iterrows():
 
     # === Build prompt ===
     prompt = (
-        f"You are an expert in understanding satellite imagery and you work for the US army. "
-        f"We got intel that this area is a base/facility of the military of {country}. "
-        "Analyze this image, try to find military devices, structures etc and tell me your findings."
+    f"You are an expert in understanding satellite imagery and you work for the US army. "
+    f"We got intel that this area is a base/facility of the military of {country}. "
+    "Analyze this image and respond ONLY with a JSON object containing the following keys:\n"
+    "1. 'findings': A list of findings that you think are important for the US army to know, including "
+    "all man-made structures, military equipment, and infrastructure make sure to start each finding in a new line.\n"
+    "2. 'analysis': A detailed analysis of your findings make sure to start each finding in a new line.\n"
+    "3. 'things_to_continue_analyzing': A list of things that you think are important to continue "
+    "analyzing in further images make sure to start each thing in a new line.\n"
+    "4. 'action': One of ['zoom-in', 'zoom-out', 'move-left', 'move-right', 'finish'] based on what "
+    "would help you analyze the image or area better.\n"
+    "Respond ONLY with valid JSON. Do not include explanations or extra text."
     )
 
     # === OpenRouter API call ===
@@ -104,16 +113,29 @@ for index, row in df_subset.iterrows():
         result = response.json()
         if "choices" in result:
             analysis = result["choices"][0]["message"]["content"]
-            print("\n--- LLM Analysis ---")
-            print(f"[{base_id} - {country}]\n{analysis}\n")
         else:
             print("❌ Unexpected response format:")
             print(result)
             
         analysis = result["choices"][0]["message"]["content"]
 
-        print("\n--- LLM Analysis ---")
-        print(f"[{base_id} - {country}]\n{analysis}\n")
+        # Clean up the analysis string
+        analysis_clean = analysis.strip()
+        if analysis_clean.startswith("```json"):
+            analysis_clean = analysis_clean.replace("```json", "").replace("```", "").strip()
+
+        try:
+            parsed_json = json.loads(analysis_clean)
+            print("\n✅ Parsed JSON:")
+            print(parsed_json)
+            
+        
+        except json.JSONDecodeError as e:
+            print("❌ JSON parsing failed:")
+            print(e)
+            print("Raw response:")
+            print(analysis_clean)
+
     except Exception as e:
         print(f"❌ Error analyzing {base_id}: {e}")
 
