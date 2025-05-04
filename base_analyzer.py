@@ -81,28 +81,48 @@ for index, row in df_subset.iterrows():
     os.remove(png_path)
     print(f"Deleted original PNG: {png_path}")
 
-    for analyst in range(8):
-        
+    history_of_analysts = []
 
+    for analyst in range(2):
+        
         # === Read and encode image ===
         with open(jpg_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode()
 
         # === Build prompt ===
-        prompt = (
-        f"You are an expert in understanding satellite imagery and you work for the US army. "
-        f"We got intel that this area is a base/facility of the military of {country}. "
-        "Analyze this image and respond ONLY with a JSON object containing the following keys:\n"
-        "1. 'findings': A list of findings that you think are important for the US army to know, including "
-        "all man-made structures, military equipment, and infrastructure make sure to start each finding in a new line.\n"
-        "2. 'analysis': A detailed analysis of your findings make sure to start each finding in a new line.\n"
-        "3. 'things_to_continue_analyzing': A list of things that you think are important to continue "
-        "analyzing in further images make sure to start each thing in a new line.\n"
-        "4. 'action': One of ['zoom-in', 'zoom-out', 'move-left', 'move-right', 'finish'] based on what "
-        "would help you analyze the image or area better.\n" 
-        "If the current zoom level is already low enough to understand key details, do not ask to zoom in further. Only suggest 'zoom-in' if major details are still unclear.\n"
-        "Respond ONLY with valid JSON. Do not include explanations or extra text."
-        )
+        if analyst == 0:
+            prompt = (
+            f"You are an expert in understanding satellite imagery and you work for the US army. "
+            f"We got intel that this area is a base/facility of the military of {country}. "
+            "Analyze this image and respond ONLY with a JSON object containing the following keys:\n"
+            "1. 'findings': A list of findings that you think are important for the US army to know, including "
+            "all man-made structures, military equipment, and infrastructure make sure to start each finding in a new line.\n"
+            "2. 'analysis': A detailed analysis of your findings make sure to start each finding in a new line.\n"
+            "3. 'things_to_continue_analyzing': A list of things that you think are important to continue "
+            "analyzing in further images make sure to start each thing in a new line.\n"
+            "4. 'action': One of ['zoom-in', 'zoom-out', 'move-left', 'move-right'] based on what "
+            "would help you analyze the image or area better.\n" 
+            "Respond ONLY with valid JSON. Do not include explanations or extra text."
+            )
+        else:
+            previous = "\n\n".join(
+            [f"Analyst {i+1}: Findings: {h['findings']}\nAnalysis: {h['analysis']}\nAction: {h['action']}" for i, h in enumerate(history_of_analysts)]
+            )
+            prompt = (
+                "Here is the analysis of previous analysts about this area and their recommendations.\n"
+                f"You can use this data but don’t use it as fact, think for yourself:\n {previous}."
+                "You are an expert in understanding satellite imagery and you work for the US army. "
+                f"We got intel that this area is a base/facility of the military of {country}. "
+                "Analyze this image and respond ONLY with a JSON object containing the following keys:\n"
+                "1. 'findings': A list of findings that you think are important for the US army to know, including "
+                "all man-made structures, military equipment, and infrastructure make sure to start each finding in a new line.\n"
+                "2. 'analysis': A detailed analysis of your findings make sure to start each finding in a new line.\n"
+                "3. 'things_to_continue_analyzing': A list of things that you think are important to continue "
+                "analyzing in further images make sure to start each thing in a new line.\n"
+                "4. 'action': One of ['zoom-in', 'zoom-out', 'move-left', 'move-right'] based on what "
+                "would help you analyze the image or area better.\n" 
+                "Respond ONLY with valid JSON. Do not include explanations or extra text."
+                )
 
         # === OpenRouter API call ===
         headers = {
@@ -142,6 +162,7 @@ for index, row in df_subset.iterrows():
             analysis_clean = re.sub(r",\s*([\]}])", r"\1", analysis_clean)  # Remove trailing commas
             try:
                 parsed_json = json.loads(analysis_clean)
+                history_of_analysts.append(parsed_json)
                 print("\n✅ Parsed JSON:")
                 print(parsed_json)
                 action = parsed_json.get("action", "finish")
@@ -166,6 +187,61 @@ for index, row in df_subset.iterrows():
 
         except Exception as e:
             print(f"❌ Error analyzing {base_id}: {e}")
+
+
+model = "tngtech/deepseek-r1t-chimera:free"
+    
+    # === Commander-Level Report ===
+commander_prompt = (
+    "You are a senior US military commander reviewing satellite analysis of a potential enemy base.\n"
+    "Here is the full history of analyst observations from multiple experts:\n\n"
+    f"{json.dumps(history_of_analysts, indent=2)}\n\n"
+    "Please synthesize these into:\n"
+    "1. A concise executive summary (~4 sentences).\n"
+    "2. A prioritized list of strategic insights.\n"
+    "3. Final recommendations for further surveillance or action.\n\n"
+    "Only return valid JSON with keys: 'summary', 'insights', and 'recommendations'."
+)
+
+commander_payload = {
+    "model": model,
+    "messages": [
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": commander_prompt}]
+        }
+    ]
+}
+
+try:
+    commander_response = httpx.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=commander_payload, timeout=60)
+    result = commander_response.json()
+
+    try:
+        final_report = result["choices"][0]["message"]["content"]
+        if not final_report.strip():
+            raise ValueError("Empty response from Phi-4 model")
+    except Exception as e:
+        print("❌ Commander summary missing or invalid:")
+        print(result)
+        raise e
+
+
+    # Clean JSON if needed
+    final_report_clean = final_report.strip()
+    if final_report_clean.startswith("```json"):
+        final_report_clean = final_report_clean.replace("```json", "").replace("```", "").strip()
+    final_report_clean = re.sub(r",\s*([\]}])", r"\1", final_report_clean)
+
+    commander_json = json.loads(final_report_clean)
+    print("\nFinal Commander Report:")
+    print(json.dumps(commander_json, indent=2))
+
+except Exception as e:
+    print("❌ Commander summary generation failed:")
+    print(e)
+
+
 
     # Keep browser open after loop (optional for debug)
     input("Press Enter to close browser...")
