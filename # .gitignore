@@ -16,8 +16,8 @@ __pycache__/
 .env
 
 # Screenshot output
-screenshots/
-screenshots_jpeg/
+screenshots
+
 
 # Logs
 *.log
@@ -25,5 +25,3 @@ screenshots_jpeg/
 # macOS and Windows noise
 .DS_Store
 Thumbs.db
-
-.screenshots

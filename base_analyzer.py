@@ -136,7 +136,11 @@ for index, row in df_subset.iterrows():
                 "analyzing in further images make sure to start each thing in a new line.\n"
                 "4. 'action': One of ['zoom-in', 'zoom-out', 'move-left', 'move-right'] based on what "
                 "would help you analyze the image or area better.\n"
-                "answer zoom-in if you think that the image is not clear enough.\n or you are missing some key details.\n"
+                "answer zoom-in if you think that the image is not clear enough.\n or you are missing some key details.\n" 
+                "dont answer zoom-in if you think that the image is clear enough.\n"
+                "answer zoom-out if you think that the image is too zoomed in.\n" \
+                "answer move-left if you think that the image is not showing the whole area and needs to be more centerd to the left.\n" 
+                "answer move-right if you think that the image is not showing the whole area and needs to be more centerd to the right.\n"
                 "Respond ONLY with valid JSON. Do not include explanations or extra text."
                 )
 

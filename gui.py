@@ -4,6 +4,10 @@ import os
 from PIL import Image
 import csv
 
+
+# === Load API Key ===
+api_key = os.getenv("OPENROUTER_API_KEY")
+
 # Load data.json
 with open("data.json", "r", encoding="utf-8") as f:
     data = json.load(f)
@@ -85,3 +89,47 @@ for insight in commander.get("insights", []):
 st.markdown("**Recommendations:**")
 for rec in commander.get("recommendations", []):
     st.markdown(f"- ⚠️ {rec}")
+
+import requests
+
+st.subheader("🧠 Ask the AI about this Base")
+
+user_prompt = st.text_input("Ask a question about this base (LLM):")
+
+def ask_openrouter_llm(base_id, base_data, user_prompt):
+    base_context = json.dumps(base_data, indent=2)
+
+    system_msg = f"""You are a military OSINT expert. You are reviewing the intelligence for base {base_id}.
+Here is the base's structured report data:
+{base_context}
+
+Answer based on this only.
+"""
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "http://localhost:8501",
+        "X-Title": "OSINT Assistant",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": "deepseek/deepseek-prover-v2:free",
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_prompt}
+        ]
+    }
+
+    res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+    
+    if res.status_code == 200:
+        return res.json()["choices"][0]["message"]["content"]
+    else:
+        return f"Error: {res.status_code} — {res.text}"
+
+if user_prompt:
+    with st.spinner("Asking LLM..."):
+        response = ask_openrouter_llm(selected_base, base_data, user_prompt)
+        st.markdown("**LLM Response:**")
+        st.success(response)
