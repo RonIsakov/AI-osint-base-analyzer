@@ -25,3 +25,5 @@ screenshots_jpeg/
 # macOS and Windows noise
 .DS_Store
 Thumbs.db
+
+.screenshots

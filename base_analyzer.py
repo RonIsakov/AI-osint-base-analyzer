@@ -19,7 +19,7 @@ api_key = os.getenv("OPENROUTER_API_KEY")
 
 # Constants
 CSV_PATH = 'military_bases.csv'
-ROWS_TO_PROCESS = 8
+ROWS_TO_PROCESS = 25
 WAIT_TIME = 5
 SCREENSHOT_DIR = 'screenshots'
 TARGET_WIDTH = 1024
