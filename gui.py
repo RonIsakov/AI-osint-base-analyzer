@@ -48,7 +48,7 @@ st.subheader("🖼️ Screenshot")
 for file in sorted(os.listdir(screenshots_dir)):
     if file.endswith(".jpg") and file.split("_")[1].startswith(str(selected_base)):
         img_path = os.path.join(screenshots_dir, file)
-        st.image(Image.open(img_path), caption=file, use_container_width=True)
+        st.image(Image.open(img_path), caption=file)
 
 
 # Show analyst findings
@@ -114,7 +114,7 @@ Answer based on this only.
     }
 
     payload = {
-        "model": "deepseek/deepseek-prover-v2:free",
+        "model": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
         "messages": [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_prompt}
@@ -124,9 +124,17 @@ Answer based on this only.
     res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
     
     if res.status_code == 200:
-        return res.json()["choices"][0]["message"]["content"]
+        try:
+            json_data = res.json()
+            if "choices" in json_data:
+                return json_data["choices"][0]["message"]["content"]
+            else:
+                return f"⚠️ API returned 200 but no 'choices' found. Response: {json_data}"
+        except Exception as e:
+            return f"⚠️ Failed to parse JSON: {e}"
     else:
-        return f"Error: {res.status_code} — {res.text}"
+        return f"❌ Error: {res.status_code} — {res.text}"
+
 
 if user_prompt:
     with st.spinner("Asking LLM..."):
