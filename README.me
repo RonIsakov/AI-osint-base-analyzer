@@ -1,0 +1,85 @@
+# OSINT Military Base Analyzer
+
+This project is an advanced Open Source Intelligence (OSINT) platform for military base analysis, leveraging satellite imagery and a collaborative team of AI agents. Unlike simple LLM chatbots, this system orchestrates multiple independent language models—each acting as a specialized analyst or commander. These AI agents analyze imagery, generate findings, and even provide instructions to one another, simulating a real-world intelligence workflow. The results are synthesized into actionable insights and strategic recommendations, all accessible through an interactive Streamlit web interface. Users can visualize base locations, review detailed multi-agent reports, and engage directly with the AI team for deep, scenario-driven intelligence.
+
+## Features
+
+- **Map Visualization:** Interactive map of military base locations.
+- **Screenshot Viewer:** Displays satellite images of selected bases.
+- **Analyst Observations:** Shows step-by-step findings and analysis from multiple AI "analysts."
+- **Commander Summary:** Synthesized executive summary, insights, and recommendations.
+- **Ask the AI:** Query an LLM for custom questions about any base.
+
+## Requirements
+
+- Python 3.8+
+- [Streamlit](https://streamlit.io/)
+- [Pandas](https://pandas.pydata.org/)
+- [Pillow](https://python-pillow.org/)
+- [requests](https://docs.python-requests.org/)
+- [OpenRouter API key](https://openrouter.ai/)
+- (Optional for data generation) [selenium](https://selenium.dev/), [httpx](https://www.python-httpx.org/)
+
+## Setup
+
+1. **Clone the repository:**
+    ```bash
+    git clone <your-repo-url>
+    cd assignment#2_ossint
+    ```
+
+2. **(Recommended) Create and activate a virtual environment:**
+    ```bash
+    python -m venv venv
+    # On Windows:
+    .\venv\Scripts\activate
+    ```
+
+3. **Install dependencies:**
+    ```bash
+    pip install streamlit pandas pillow requests
+    ```
+
+4. **Set your OpenRouter API key:**
+    - Create a `.env` file or set the environment variable `OPENROUTER_API_KEY` with your API key.
+
+5. **Prepare your data:**
+    - Place your `data.json` and `military_bases.csv` in the project directory.
+    - Place base screenshots in the `screenshots/` folder, named as expected by the code.
+
+## Usage Workflow
+
+**1. Generate Analysis Data**
+
+Before launching the web interface, you must first run the analysis pipeline to generate the required data files. This step uses multiple independent LLMs to analyze satellite images, pass instructions, and synthesize intelligence reports.
+
+```bash
+python base_analyzer.py
+```
+
+This will create or update `data.json` with all analyst and commander reports, using the information from your `military_bases.csv` and images in the `screenshots/` folder.
+
+**2. Launch the Streamlit Web App**
+
+Once the data is generated, start the Streamlit GUI:
+
+```bash
+streamlit run gui.py
+```
+
+The app will open in your browser. Use the sidebar to select a base and explore the multi-agent AI analysis.
+
+---
+
+**Note:**  
+If you skip the first step, the Streamlit app will not have any data to display or analyze.
+
+## Data Files
+
+- `data.json`: Contains structured analysis and summaries for each base.
+- `military_bases.csv`: Contains base names and coordinates.
+- `screenshots/`: Folder with satellite images for each base.
+
+## Generating Data
+
+The `base_analyzer.py` script can be used to generate or update `data.json` by running AI analysis on your base list and images. Make sure all required dependencies are installed (`selenium`, `httpx`, etc.).
